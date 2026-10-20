@@ -1,5 +1,8 @@
 """RDAP queries and opt-in DNS diagnostics. Standard library plus system dig."""
+import csv
 import datetime
+from functools import lru_cache
+import io
 import ipaddress
 import json
 import os
@@ -11,8 +14,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-USER_AGENT = 'zwhois/0.1.2 (registration-audit utility)'
+USER_AGENT = 'zwhois/0.1.5 (registration-audit utility)'
 BOOTSTRAP = 'https://data.iana.org/rdap/'
+REGISTRAR_DIRECTORY = 'https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv'
 DEFAULT_RBLS = ['zen.spamhaus.org', 'bl.spamcop.net', 'b.barracudacentral.org']
 
 class LookupError_(Exception):
@@ -107,6 +111,139 @@ def dates(obj):
     return items
 
 
+
+def event_date(obj, action):
+    """RDAP eventAction is authoritative: do not confuse the two expiry events."""
+    for item in obj.get('events', []):
+        if (isinstance(item, dict) and str(item.get('eventAction', '')).strip().lower() == action
+                and item.get('eventDate')):
+            return str(item['eventDate'])
+    return None
+
+
+def registrar_iana_id(obj):
+    """Read the IANA registrar ID from the RDAP registrar entity (ICANN profile)."""
+    for entity in obj.get('entities', []):
+        if not isinstance(entity, dict) or 'registrar' not in entity.get('roles', []):
+            continue
+        for ident in entity.get('publicIds', []):
+            if (str(ident.get('type', '')).lower() == 'iana registrar id'
+                    and str(ident.get('identifier', '')).isdigit()):
+                return str(int(ident['identifier']))
+        handle = str(entity.get('handle', ''))
+        if handle.isdigit():
+            return str(int(handle))
+    return None
+
+
+@lru_cache(maxsize=1)
+def registrar_services():
+    """Download IANA's official registrar ID -> RDAP Base URL directory.
+
+    Only the HTTPS URLs listed by IANA are used for registrar lookups.
+    This is separate from the TLD/bootstrap registry RDAP service.
+    """
+    req = urllib.request.Request(REGISTRAR_DIRECTORY, headers={'User-Agent': USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as response:
+            raw = response.read(2_000_001)
+    except (OSError, urllib.error.HTTPError) as exc:
+        raise LookupError_(f'IANA registrar directory unavailable: {exc}') from exc
+    if len(raw) > 2_000_000:
+        raise LookupError_('IANA registrar directory exceeds size limit')
+    try:
+        reader = csv.DictReader(io.StringIO(raw.decode('utf-8-sig')))
+        if not reader.fieldnames or not {'ID', 'RDAP Base URL'} <= set(reader.fieldnames):
+            raise ValueError('Unexpected registrar CSV header')
+        return {
+            str(int(row['ID'].strip())): row['RDAP Base URL'].strip()
+            for row in reader
+            if (row.get('ID') or '').strip().isdigit()
+            and (row.get('RDAP Base URL') or '').strip().startswith('https://')
+        }
+    except (ValueError, UnicodeError, csv.Error, KeyError, TypeError) as exc:
+        raise LookupError_(f'Cannot parse IANA registrar directory: {exc}') from exc
+
+
+def registrar_expiration(domain, registry_obj):
+    """Return (date, provenance, notice) without ever failing a registry lookup.
+
+    Registry 'expiration' != registrar 'registrar expiration'. Registrar's
+    own RDAP is preferred; registry's optional registrar event is fallback.
+    """
+    copied = event_date(registry_obj, 'registrar expiration')
+    ident = registrar_iana_id(registry_obj)
+    if not ident:
+        return copied, ('Registry RDAP (registrar expiration event)' if copied else None), None
+    try:
+        base = registrar_services().get(ident)
+    except LookupError_ as exc:
+        return copied, ('Registry RDAP (registrar expiration event)' if copied else None), str(exc)
+    if not base:
+        return copied, ('Registry RDAP (registrar expiration event)' if copied else None), 'No registrar RDAP URL listed by IANA'
+    url = base.rstrip('/') + '/domain/' + urllib.parse.quote(domain, safe='')
+    try:
+        registrar_obj = get_json(url, timeout=7)
+        # An unexpected domain response is not authoritative for this target.
+        if registrar_obj.get('ldhName', '').lower().rstrip('.') != domain.lower().rstrip('.'):
+            raise LookupError_('Registrar RDAP returned a different or missing domain name')
+        date = event_date(registrar_obj, 'registrar expiration')
+        if date:
+            return date, 'Registrar RDAP', None
+        return copied, ('Registry RDAP (registrar expiration event)' if copied else None), 'Registrar RDAP omitted registrar expiration'
+    except (LookupError_, ValueError, AttributeError, TypeError) as exc:
+        return copied, ('Registry RDAP (registrar expiration event)' if copied else None), 'Registrar RDAP unavailable: ' + str(exc)
+
+
+def parse_rdap_timestamp(value):
+    """Parse an RDAP RFC 3339 instant on Python 3.9 and newer.
+
+    Python 3.9/3.10 datetime.fromisoformat rejects fractional seconds that
+    have lengths other than 3 or 6. Some registrar RDAP servers return .00Z.
+    Normalize the fractional part to six digits before parsing, while
+    preserving the original timestamp string for the report.
+    """
+    if not isinstance(value, str):
+        raise ValueError('Expected an RDAP timestamp string')
+    match = re.fullmatch(
+        r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})'
+        r'(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})', value)
+    if not match:
+        raise ValueError('Invalid RDAP RFC 3339 timestamp')
+    body, fractional, zone = match.groups()
+    # fromisoformat in Python 3.9 accepts a six-digit fraction reliably.
+    if fractional is not None:
+        body += '.' + fractional[:6].ljust(6, '0')
+    if zone == 'Z':
+        zone = '+00:00'
+    return datetime.datetime.fromisoformat(body + zone)
+
+
+def different_expiration_dates(registry, registrar):
+    """Return whether two expiration timestamps merit a renewal warning.
+
+    Preserve both precise RDAP values in the report. Treat a difference of at
+    most 60 seconds on the same UTC calendar date as timestamp precision noise,
+    not a material renewal-date disagreement. Different UTC dates always warn,
+    including a few seconds on opposite sides of midnight. Timezone offsets
+    are normalized before comparison. This is a reporting policy, not RDAP law.
+    """
+    if not registry or not registrar:
+        return False
+    try:
+        first = parse_rdap_timestamp(registry)
+        second = parse_rdap_timestamp(registrar)
+        if first.tzinfo is None or second.tzinfo is None:
+            return registry != registrar
+        first = first.astimezone(datetime.timezone.utc)
+        second = second.astimezone(datetime.timezone.utc)
+        if first.date() != second.date():
+            return True
+        return abs((first - second).total_seconds()) > 60
+    except (TypeError, ValueError, OverflowError):
+        return registry != registrar
+
+
 def entity_name(entity):
     v = entity.get('vcardArray') or []
     if len(v) == 2 and isinstance(v[1], list):
@@ -117,7 +254,7 @@ def entity_name(entity):
     return entity.get('handle', 'Not provided')
 
 
-def report_rdap(kind, registered, obj, requested=None):
+def report_rdap(kind, registered, obj, requested=None, registrar_expiry=None, registrar_source=None, registrar_notice=None):
     result = [f'Target:           {requested or registered}', f'Type:             {kind.upper()}']
     if kind == 'domain':
         result += [f'Registered domain: {registered}']
@@ -133,11 +270,22 @@ def report_rdap(kind, registered, obj, requested=None):
         result.extend([f'AS number:        {obj.get("startAutnum", "?")}', f'Network:          {obj.get("name", "Not provided")}'])
     events = dates(obj)
     if kind == 'domain':
-        for label, action in [('Expires', 'expiration'), ('Created', 'registration'), ('Updated', 'last changed')]:
-            matches = [v for k, v in events if k.lower() == action]
-            result.append(f'{label + ":":17}{", ".join(matches) if matches else "Not provided"}')
+        registry_expiry = event_date(obj, 'expiration')
+        # When directly calling report_rdap (tests/other consumers), display a
+        # registry-provided registrar event without inventing a registrar query.
+        registrar_expiry = registrar_expiry or event_date(obj, 'registrar expiration')
+        result.append(f'{"Registry Expires:":20}{registry_expiry or "Not provided"}')
+        result.append(f'{"Registrar Expires:":20}{registrar_expiry or "Not provided"}')
+        if registrar_expiry and registrar_source:
+            result.append(f'Registrar date from: {registrar_source}')
+        if different_expiration_dates(registry_expiry, registrar_expiry):
+            result.append('WARN: Registrar and registry expiration dates differ; confirm the renewal deadline with your registrar')
+        if registrar_notice and not registrar_expiry:
+            result.append('Note:             Registrar expiration could not be independently confirmed (' + registrar_notice + ')')
+        for label, action in [('Created', 'registration'), ('Updated', 'last changed')]:
+            result.append(f'{label + ":":20}{event_date(obj, action) or "Not provided"}')
     for action, when in events:
-        if kind != 'domain' or action.lower() not in ('registration', 'last changed', 'expiration'):
+        if kind != 'domain' or action.lower() not in ('registration', 'last changed', 'expiration', 'registrar expiration'):
             result.append(f'Date ({action}): {when}')
     if kind == 'domain':
         nss = [x.get('ldhName', '') for x in obj.get('nameservers', [])]
@@ -524,7 +672,14 @@ def subdomain_report(domain, cfg):
 
 def audit(target, flags, cfg):
     kind, registered, obj, requested = rdap_for(target)
-    out = [report_rdap(kind, registered, obj, requested)]
+    if kind == 'domain':
+        registrar_date, registrar_source, registrar_notice = registrar_expiration(registered, obj)
+    else:
+        registrar_date, registrar_source, registrar_notice = None, None, None
+    out = [report_rdap(kind, registered, obj, requested,
+                       registrar_expiry=registrar_date,
+                       registrar_source=registrar_source,
+                       registrar_notice=registrar_notice)]
     if kind != 'domain':
         if any(flags):
             out.append('\nDNS options require a domain or hostname; registration report shown only.')

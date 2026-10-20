@@ -1,3 +1,26 @@
+zwhois (0.1.5-1) unstable; urgency=medium
+
+  * Support registrar RDAP fractional-second timestamps on Python 3.9.
+  * Preserve source timestamps and compare normalized UTC instants.
+  * Add regression tests for old Python datetime parsing restrictions.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000
+
+zwhois (0.1.4-1) unstable; urgency=medium
+
+  * Avoid renewal mismatch warning for same-day timestamp differences up to 60 seconds.
+  * Keep both timestamps visible; retain warnings for different UTC dates.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000
+
+zwhois (0.1.3-1) unstable; urgency=medium
+
+  * Distinguish registry from registrar registration expiration dates.
+  * Discover registrar RDAP service by IANA registrar ID.
+  * Document missing/mismatched expiration date behavior.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000
+
 zwhois (0.1.2-1) unstable; urgency=medium
 
   * Query authoritative parent referrals for NS glue and compare child addresses.

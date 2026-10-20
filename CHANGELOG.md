@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.5 — Python 3.9/3.10 registrar expiration compatibility
+
+- Fix two-digit fractional timestamps returned by registrar RDAP, such as eNom's `2027-01-25T03:18:00.00Z`, on AlmaLinux/RHEL 9 Python 3.9.
+- Normalize RFC 3339 fractional seconds to six digits before comparison, keeping the original RDAP values in the report.
+- Add a regression test simulating Python 3.9's stricter `datetime.fromisoformat` parser.
+
+## 0.1.4 — avoid misleading expiration warnings
+
+- Preserve the exact registry and registrar expiration timestamps while suppressing warnings for same-day differences of at most 60 seconds (e.g., eNom 10-second offset).
+- Continue warning for different UTC dates or differences over 60 seconds.
+- Add regression tests for rounding, midnight crossings, and true renewal mismatches.
+
+
+## 0.1.3 — distinguish registrar and registry expiration
+
+- Label the registry `expiration` event **Registry Expires** and the distinct `registrar expiration` event **Registrar Expires**.
+- Query the registrar's RDAP service where it can be discovered from IANA's official registrar ID directory.
+- Fall back only to an explicitly labeled registrar expiration event in registry RDAP; never guess a registrar date from the registry expiry.
+- Warn when dates differ, normalize timezone offsets for comparisons and report unavailable registrar RDAP without failing a registration lookup.
+- Add registrar expiration tests, source documentation and a live smoke check.
+
+
 ## 0.1.2 — parent glue, DNSBL safety and documentation
 
 - Inspect authoritative parent referrals (AUTHORITY delegation, ADDITIONAL glue) rather than treating recursive A/AAAA responses as glue.

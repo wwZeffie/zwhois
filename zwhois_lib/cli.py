@@ -10,7 +10,7 @@ from . import __version__
 from .core import LookupError_, audit, load_config
 
 EXAMPLES = '''Examples:
-  zwhois example.com                   Registration and expiry dates, nameservers
+  zwhois example.com                   Registry/registrar expiry dates, nameservers
   zwhois secure.example.com            Registration for parent; DNS checks target host
   zwhois 8.8.8.8                       IP network RDAP lookup
   zwhois 2001:4860:4860::8888          IPv6 network RDAP lookup
@@ -30,6 +30,7 @@ EXAMPLES = '''Examples:
 
   The < sign redirects a text file into standard input. The > sign saves
   output to a file. A plain domain list is supported, NOT a registrar CSV.
+  Registry and registrar expiration dates are distinct; either may be missing.
   Missing RDAP fields are reported as Not provided. Results are observations,
   not guarantees of host ownership, deliverability, or security.
   Configuration: ~/.config/zwhois/config.json (see example in source archive).
@@ -39,7 +40,7 @@ EXAMPLES = '''Examples:
 
 
 def parser():
-    p = argparse.ArgumentParser(prog='zwhois', description='WHOIS-style RDAP registration and optional DNS/hosting audits (no Python packages required)', epilog=EXAMPLES, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(prog='zwhois', description='WHOIS-style RDAP registry/registrar expiry, registration and optional DNS/hosting audits (no pip packages required)', epilog=EXAMPLES, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('targets', nargs='*', help='Domain, hostname, IPv4/IPv6 address, or AS number; reads redirected stdin if none')
     p.add_argument('-m', '--mail', action='store_true', help='MX, mail server addresses, IP RDAP ownership')
     p.add_argument('-w', '--web', action='store_true', help='A/AAAA/CNAME for hostname and www; IP RDAP ownership')

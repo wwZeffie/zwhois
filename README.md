@@ -6,12 +6,12 @@
 
 Created by **Zeffie** · Published by **One Avenue LLC** · Development assistance: **OpenAI ChatGPT**. Licensed under **MIT**. Project information: [zeffie.com](https://zeffie.com) and [oneavenue.com](https://oneavenue.com). Report bugs at [GitHub Issues](https://github.com/wwZeffie/zwhois/issues). Those websites are references, not a promise of free technical support.
 
-**Status: 0.1.2 test release.** Source and packaging are intended for local review; neither distribution acceptance nor exhaustive public-registry compatibility is claimed. Nothing is uploaded to GitHub automatically.
+**Status: 0.1.5 test release.** Source and packaging are intended for local review; neither distribution acceptance nor exhaustive public-registry compatibility is claimed. Nothing is uploaded to GitHub automatically.
 
 ## At a glance
 
 ```text
-zwhois example.com                   # Registration dates, registrar, status, nameservers
+zwhois example.com                   # Registry/registrar expiry, registration, registrar, nameservers
 zwhois secure.example.com            # Registered parent + optional exact-host checks
 zwhois 8.8.8.8                       # IP network registration
 zwhois 2001:4860:4860::8888          # IPv6 network registration
@@ -48,8 +48,8 @@ A **plain** lookup does not run hosting, DNSBL, web crawling or TLS-certificate 
 From the directory containing the downloaded archive:
 
 ```sh
-tar -xzf zwhois-0.1.2.tar.gz; \
-cd zwhois-0.1.2; \
+tar -xzf zwhois-0.1.5.tar.gz; \
+cd zwhois-0.1.5; \
 make test; \
 make install; \
 zwhois -h
@@ -58,7 +58,7 @@ zwhois -h
 **One-liner for a local, already-downloaded release** (uses `&&` so an error stops the chain):
 
 ```sh
-tar -xzf zwhois-0.1.2.tar.gz && cd zwhois-0.1.2 && make test && make install
+tar -xzf zwhois-0.1.5.tar.gz && cd zwhois-0.1.5 && make test && make install
 ```
 
 Uninstall with `make uninstall` from that same source tree. Default source installation is under `/usr/local`; package manager installations use `/usr`. Do not run an arbitrary `curl | sh` command; once an official GitHub release exists, its versioned archive URL and SHA-256 checksum can support a remote download/verify/install one-liner.
@@ -68,13 +68,13 @@ Uninstall with `make uninstall` from that same source tree. Default source insta
 Install your distribution's RPM build tools and Python/`dig` dependencies. The source archive contains `packaging/rpm/zwhois.spec`, so the simplest build is:
 
 ```sh
-rpmbuild -ta zwhois-0.1.2.tar.gz
+rpmbuild -ta zwhois-0.1.5.tar.gz
 ```
 
 Built RPMs typically appear under `~/rpmbuild/RPMS/noarch/`. Install with your package manager after inspecting the build output:
 
 ```sh
-dnf install ~/rpmbuild/RPMS/noarch/zwhois-0.1.2-1*.noarch.rpm
+dnf install ~/rpmbuild/RPMS/noarch/zwhois-0.1.5-1*.noarch.rpm
 ```
 
 The manual alternative is to place the tarball in `~/rpmbuild/SOURCES/`, copy `packaging/rpm/zwhois.spec` to `~/rpmbuild/SPECS/` and use `rpmbuild -ba` on the spec. The 0.1.1 duplicate `%doc` warnings were corrected in the RPM spec. **An RPM build still requires testing on your target RPM distribution.**
@@ -84,11 +84,31 @@ The manual alternative is to place the tarball in `~/rpmbuild/SOURCES/`, copy `p
 Install `build-essential`, `debhelper`, `dpkg-dev`, `python3`, `bind9-dnsutils` (or `dnsutils`) and `dialog` as appropriate. Extract the source archive, then:
 
 ```sh
-cd zwhois-0.1.2; \
+cd zwhois-0.1.5; \
 dpkg-buildpackage -us -uc -b
 ```
 
-The `.deb` is written in the parent directory if the build succeeds; install with `apt install ./zwhois_0.1.2-1_all.deb` from there. A distribution source package additionally requires the correctly named upstream tarball (`zwhois_0.1.2.orig.tar.gz`) and `dpkg-buildpackage -S`; see [Debian's packaging guide](https://www.debian.org/doc/manuals/debmake-doc/ch06.en.html). An RPM built from the source tarball is **not** a substitute for actually testing a Debian package.
+The `.deb` is written in the parent directory if the build succeeds; install with `apt install ./zwhois_0.1.5-1_all.deb` from there. A distribution source package additionally requires the correctly named upstream tarball (`zwhois_0.1.5.orig.tar.gz`) and `dpkg-buildpackage -S`; see [Debian's packaging guide](https://www.debian.org/doc/manuals/debmake-doc/ch06.en.html). An RPM built from the source tarball is **not** a substitute for actually testing a Debian package.
+
+## Example expiry report
+
+The dates below are **illustrative**, not a current lookup:
+
+```text
+Target:           example.com
+Type:             DOMAIN
+Registered domain: example.com
+Registrar:        Example Registrar
+Registry Expires:   2028-04-01T00:00:00Z
+Registrar Expires:  2027-04-01T00:00:00Z
+Registrar date from: Registrar RDAP
+WARN: Registrar and registry expiration dates differ; confirm the renewal deadline with your registrar
+Created:            2000-04-01T00:00:00Z
+Updated:            2026-04-01T00:00:00Z
+Nameservers:      ns1.example.net, ns2.example.net
+```
+
+For automated audits, do **not** interpret an absent registrar expiration date as a renewal or an expired registration. Ask the registrar when accurate billing/renewal status is critical.
 
 ## Domain names vs hostnames
 
@@ -98,7 +118,7 @@ RDAP hostname-to-domain discovery is best-effort and can vary by registry; a hos
 
 ## Important reporting behavior
 
-- **Expires, Created, Updated**: values come from the RDAP `events` array, not a domain's TLS certificate. All other dated events that the registry returns are shown. If absent, `Not provided` is printed. Registry-level expiry may differ from a registrar's billing/renewal date.
+- **Registry Expires vs Registrar Expires**: two distinct RDAP event types, `expiration` and `registrar expiration`. The program gets registry expiry from the registry RDAP and tries the registrar’s own RDAP endpoint (discovered from the official IANA registrar directory) for registrar expiry. If the registrar cannot be reached or does not publish that event, `Not provided` is printed unless the registry includes an explicit copy of that registrar event. Differences over 60 seconds trigger a warning, as does any difference in UTC calendar date; smaller differences on the same UTC day are still displayed but do not raise a renewal warning. These are registration dates, **not** TLS-certificate expiry or proof of payment; see [registration-date guide](docs/REGISTRATION-DATES.md). Created, Updated and other lifecycle events continue to appear.
 - **Nameservers**: the default registration report uses RDAP data. `-ns` actively checks DNS parent/child consistency.
 - **IP ownership vs hosting**: address registrations identify the registered network operator, which might be a CDN or upstream, not the customer's actual hosting or mail provider.
 - **No website access**: `-w` uses DNS only. It also tries `www.` plus the requested hostname, which may not exist for a subdomain.
@@ -144,6 +164,8 @@ Run `make test` for offline regression tests; see [Testing and release checklist
 
 - [RDAP bootstrap RFC 9224](https://www.rfc-editor.org/rfc/rfc9224)
 - [RDAP JSON event semantics RFC 9083](https://www.rfc-editor.org/rfc/rfc9083)
+- [ICANN Registration Data Policy, Section 9.1.1](https://www.icann.org/resources/pages/registration-data-policy-2024-02-21-en/)
+- [IANA registrar IDs and RDAP service URLs](https://www.iana.org/assignments/registrar-ids)
 - [DNS glue in parent referrals RFC 9471](https://www.rfc-editor.org/rfc/rfc9471)
 - [DNS over TCP RFC 7766](https://www.rfc-editor.org/rfc/rfc7766)
 - [Spamhaus DNSBL error codes and access requirements](https://www.spamhaus.org/faqs/dnsbl-usage/)

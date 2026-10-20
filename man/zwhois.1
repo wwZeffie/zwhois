@@ -1,12 +1,12 @@
-.TH ZWHOIS 1 "October 2026" "zwhois 0.1.2" "User Commands"
+.TH ZWHOIS 1 "October 2026" "zwhois 0.1.5" "User Commands"
 .SH NAME
 zwhois \- WHOIS-style RDAP registration and optional DNS/hosting audit tool
 .SH SYNOPSIS
 .B zwhois
 .RI [ options ] " domain|hostname|IPv4|IPv6|ASnumber ..."
 .SH DESCRIPTION
-Show available RDAP registration information, especially domain expiration dates,
-registration dates, registrar, status, and registered nameservers in familiar text.
+Show available RDAP registration information, including independent registry and
+registrar expiration dates, registration dates, registrar, status, and nameservers.
 IP address and AS number arguments return network registration information instead.
 Optional switches add live DNS, hosting network and reputation observations.
 There are no third-party Python dependencies; DNS checks require the system
@@ -94,6 +94,17 @@ Parent DNS authority is consulted with recursion disabled, and referral authorit
 and additional sections are interpreted separately. Glue is not inferred from
 normal recursive A/AAAA results. Missing AAAA glue is a warning, not automatically
 a protocol violation. Checks can be inconclusive if servers are unreachable.
+.SH EXPIRATION DATES
+Registry Expires comes from the RDAP eventAction "expiration". Registrar Expires
+comes from "registrar expiration", preferably obtained directly from the registrar's
+RDAP service discovered using the IANA Registrar IDs directory and the registrar's
+IANA ID. If direct retrieval is unavailable, a registrar expiration event in the
+registry response can be used as a clearly identified fallback; otherwise the
+registrar date is shown as Not provided. The two dates may differ after registry
+auto-renewal. Differences over 60 seconds, or dates falling on different UTC
+calendar days, generate a warning; small same-day rounding differences do not.
+Both original timestamps are always displayed. Verify actual customer renewal
+and payment dates with the registrar.
 .SH LIMITATIONS
 Public RDAP can redact fields or omit dates; registry expiration can differ from
 registrar billing. Network registration owners may differ from hosting operators.
@@ -109,4 +120,4 @@ Bug tracker: https://github.com/wwZeffie/zwhois/issues
 .SH LICENSE
 MIT License; Copyright (c) 2026 One Avenue LLC.
 .SH REFERENCES
-RFC 9224 (RDAP bootstrap), RFC 9083 (RDAP events), RFC 9471 (DNS glue), RFC 7766 (DNS TCP).
+RFC 9224 (RDAP bootstrap), RFC 9083 (RDAP events), RFC 9471 (DNS glue), RFC 7766 (DNS TCP), ICANN Registration Data Policy Section 9.1.1.
