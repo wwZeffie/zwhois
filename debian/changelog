@@ -1,0 +1,21 @@
+zwhois (0.1.2-1) unstable; urgency=medium
+
+  * Query authoritative parent referrals for NS glue and compare child addresses.
+  * Recognize Spamhaus DNSBL policy error codes as inconclusive.
+  * Expand documentation and DNS test coverage.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000
+
+zwhois (0.1.1) unstable; urgency=medium
+
+  * Repair interactive dialog rendering and selection capture.
+  * Correct duplicate RPM documentation file declarations.
+  * Require a supported terminal dialog implementation.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000
+
+zwhois (0.1.0) unstable; urgency=medium
+
+  * Initial test package for domain, host and IP RDAP auditing.
+
+ -- Zeffie <noreply@example.invalid>  Tue, 20 Oct 2026 00:00:00 +0000

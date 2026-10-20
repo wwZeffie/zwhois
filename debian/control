@@ -1,0 +1,16 @@
+Source: zwhois
+Section: net
+Priority: optional
+Maintainer: Zeffie <noreply@example.invalid>
+Build-Depends: debhelper-compat (= 13), python3
+Standards-Version: 4.6.2
+Homepage: https://github.com/wwZeffie/zwhois
+Rules-Requires-Root: no
+
+Package: zwhois
+Architecture: all
+Depends: ${misc:Depends}, python3, dnsutils | bind9-dnsutils, dialog | whiptail
+Description: WHOIS-style RDAP and optional DNS hosting audit utility
+ Display domain registration and expiry dates, nameservers, IP ownership,
+ and optional network, email and authoritative DNS audits. Interactive dialog
+ mode is included using dialog or whiptail.

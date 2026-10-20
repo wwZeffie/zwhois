@@ -1,0 +1,5 @@
+{
+  "dnsbls": ["zen.spamhaus.org", "bl.spamcop.net", "b.barracudacentral.org"],
+  "dkim_selectors": ["default", "selector1", "selector2", "google"],
+  "subdomains": ["www", "mail", "smtp", "imap", "pop", "autodiscover", "secure"]
+}

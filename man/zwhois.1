@@ -1,0 +1,112 @@
+.TH ZWHOIS 1 "October 2026" "zwhois 0.1.2" "User Commands"
+.SH NAME
+zwhois \- WHOIS-style RDAP registration and optional DNS/hosting audit tool
+.SH SYNOPSIS
+.B zwhois
+.RI [ options ] " domain|hostname|IPv4|IPv6|ASnumber ..."
+.SH DESCRIPTION
+Show available RDAP registration information, especially domain expiration dates,
+registration dates, registrar, status, and registered nameservers in familiar text.
+IP address and AS number arguments return network registration information instead.
+Optional switches add live DNS, hosting network and reputation observations.
+There are no third-party Python dependencies; DNS checks require the system
+.B dig
+command. The tool never crawls web pages or performs certificate health checks.
+.SH ARGUMENTS
+.TP
+.I target
+A registered domain, full hostname, IPv4 address, IPv6 address, or AS number
+(such as AS15169). Multiple targets are permitted. If none is given and standard
+input is redirected, read one target per line. Comments starting with # are ignored.
+.SH OPTIONS
+.TP
+.B \-m, \-\-mail
+Look up MX hosts, their IP addresses, and RDAP network operators.
+.TP
+.B \-w, \-\-web
+Look up A/AAAA/CNAME for the target and www-prefixed target, with RDAP IP allocation owners.
+.TP
+.B \-H, \-\-hosting
+Combined web and mail infrastructure observations; does not perform security or blocklist checks.
+.TP
+.B \-s, \-\-subdomains
+Check selected common subdomain records, not an exhaustive enumeration.
+.TP
+.B \-S, \-\-security
+Print SPF/DMARC TXT content and configured DKIM selector TXT lookups. This is not
+an SPF/DKIM policy verifier, and absent probed selectors do not prove no DKIM exists.
+.TP
+.B \-b, \-\-blocklists
+Query configured IP-based DNSBLs for web and MX IPs. Some lists may restrict
+querying and not support IPv6. Provider errors are not listings.
+.TP
+.B \-ns, \-\-nameservers
+Independently check parent-zone NS referral and in-domain A/AAAA glue, compare
+with child authoritative DNS, and test available nameserver IPv4/IPv6 endpoints
+using UDP and TCP for SOA and NS checks. Does not require zone transfer (AXFR).
+.TP
+.B \-f, \-\-full
+Perform all available optional checks.
+.TP
+.B \-d, \-\-dialog
+Interactive terminal interface using dialog (or whiptail), preserving current
+target and selected test options when returning to the main menu.
+.TP
+.B \-\-config PATH
+Read optional JSON settings from PATH, overriding ~/.config/zwhois/config.json.
+.TP
+.B \-\-version
+Show program version.
+.TP
+.B \-h, \-\-help
+Detailed help and examples.
+.SH EXAMPLES
+.TP
+.B zwhois example.com
+Read registrar, registration/expiration dates, and registered nameservers.
+.TP
+.B zwhois secure.example.com
+Fetch registered parent domain data, keeping the full hostname for optional DNS tests.
+.TP
+.B zwhois -H -ns example.com
+Combined web/mail and delegation/glue/transport report.
+.TP
+.B zwhois -m -S -b example.com
+Combine mail host, email TXT and reputation checks.
+.TP
+.B zwhois 8.8.8.8
+IP address allocation lookup.
+.TP
+.B zwhois AS15169
+Autonomous system registration lookup.
+.TP
+.B zwhois -d
+Open interactive menu in a real terminal.
+.TP
+.B zwhois < domains.txt > audit.txt
+Read newline-delimited targets from a file and save report to another file.
+.SH FILES
+.TP
+.I ~/.config/zwhois/config.json
+User settings. A template is shipped under share/doc/zwhois/example.json.
+.SH HOW GLUE CHECKS WORK
+Parent DNS authority is consulted with recursion disabled, and referral authority
+and additional sections are interpreted separately. Glue is not inferred from
+normal recursive A/AAAA results. Missing AAAA glue is a warning, not automatically
+a protocol violation. Checks can be inconclusive if servers are unreachable.
+.SH LIMITATIONS
+Public RDAP can redact fields or omit dates; registry expiration can differ from
+registrar billing. Network registration owners may differ from hosting operators.
+No exhaustive DKIM or subdomain discovery is possible using these DNS lookups.
+DNSBLs require adherence to provider policies. The DNS checks do not perform
+AXFR or guarantee reachability from every network.
+.SH AUTHOR
+Zeffie; published by One Avenue LLC; development assistance from OpenAI ChatGPT.
+.SH SUPPORT
+Project information: https://zeffie.com and https://oneavenue.com
+.br
+Bug tracker: https://github.com/wwZeffie/zwhois/issues
+.SH LICENSE
+MIT License; Copyright (c) 2026 One Avenue LLC.
+.SH REFERENCES
+RFC 9224 (RDAP bootstrap), RFC 9083 (RDAP events), RFC 9471 (DNS glue), RFC 7766 (DNS TCP).
